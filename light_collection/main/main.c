@@ -22,8 +22,11 @@
 #include "mqtt_client.h"
 
 #include "driver/adc.h"
+#include <time.h>
 #include <sys/time.h>
 #include "esp_sntp.h"
+#include "esp_attr.h"
+#include "esp_sleep.h"
 
 #define ADC_CHANNEL    ADC1_CHANNEL_2 // use GPIO 2 for ADC input
 #define ADC_WIDTH      ADC_WIDTH_BIT_12
@@ -32,10 +35,18 @@
 static const char *TAG = "LIGHT_COLLECTION";
 #define  EXAMPLE_ESP_WIFI_SSID "Monash-Malaysia"
 #define  EXAMPLE_ESP_WIFI_PASS ""
+
+/* Variable holding number of times ESP32 restarted since first boot.
+ * It is placed into RTC memory using RTC_DATA_ATTR and
+ * maintains its value when ESP32 wakes from deep sleep.
+ */
+RTC_DATA_ATTR static int boot_count = 0;
  
 uint32_t MQTT_CONNEECTED = 0;
 
 static void mqtt_app_start(void);
+static void obtain_time(void);
+static void initialize_sntp(void);
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
@@ -162,16 +173,9 @@ static void mqtt_app_start(void)
     esp_mqtt_client_start(client);
 }
 
-void Publisher_Task(void *params)
+void time_sync_notification_cb(struct timeval *tv)
 {
-  while (true)
-  {
-    if(MQTT_CONNEECTED)
-    {
-        esp_mqtt_client_publish(client, "/topic/test3", "Helllo World", 0, 0, 0);
-        vTaskDelay(pdMS_TO_TICKS(100)); // vTaskDelay(15000 / portTICK_PERIOD_MS);
-    }
-  }
+    ESP_LOGI(TAG, "Notification of a time synchronization event");
 }
 
 char* get_light_data(double voltage) {
@@ -186,14 +190,6 @@ char* get_light_data(double voltage) {
     // create a string to hold the light data
     char* light_data = malloc(128);
 
-    // the lower the voltage, the brighter it is
-    // if ((voltage >= 0) && (voltage <= 0.4)) {
-    //     snprintf(light_data, 128, "%s - it is light - %f", time_buf, voltage);
-    // } else if ((voltage > 0.4) && (voltage <= 2)) {
-    //     snprintf(light_data, 128, "%s - it is bright - %f", time_buf, voltage);
-    // } else {
-    // }
-
     // send data to the cloud
     snprintf(light_data, 128, "%s,3,%f", time_buf, voltage);
 
@@ -203,6 +199,9 @@ char* get_light_data(double voltage) {
 
 void app_main(void)
 {
+    ++boot_count;
+    ESP_LOGI(TAG, "Boot count: %d", boot_count);
+
     esp_log_level_set("*", ESP_LOG_INFO);
     esp_log_level_set("mqtt_client", ESP_LOG_VERBOSE);
     esp_log_level_set("MQTT_EXAMPLE", ESP_LOG_VERBOSE);
@@ -220,13 +219,33 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
     wifi_init();
 
-    // set system time to current time
-    struct timeval tv = { .tv_sec = 1680881909 };
-    settimeofday(&tv, NULL);
+    // sync system time over NTP
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+    localtime_r(&now, &timeinfo);
+    if (now < 1681786000) {
+        ESP_LOGI(TAG, "Syncing time over NTP.");
+        initialize_sntp();
+        // wait for time to be set
+        now = 0;
+        struct tm timeinfo = { 0 };
+        int retry = 0;
+        const int retry_count = 10;
+        while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < retry_count) {
+            ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, retry_count);
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+        }
+    } else {
+        ESP_LOGI(TAG, "System time is already set");
+    }
+    time(&now); // update 'now' variable with current time
+    localtime_r(&now, &timeinfo);
 
     // set timezone to Malaysia Time (MYT)
     setenv("TZ", "MYT-8", 1);
     tzset();
+    localtime_r(&now, &timeinfo);
 
     // Configure ADC
     adc1_config_width(ADC_WIDTH);
@@ -253,7 +272,35 @@ void app_main(void)
         {
             esp_mqtt_client_publish(client, "/topic/mds5_light", light_data, strlen(light_data), 0, 0);
         }
-        
-        // vTaskDelay(pdMS_TO_TICKS(200));
     }
+}
+
+static void obtain_time(void)
+{
+    ESP_ERROR_CHECK( nvs_flash_init() );
+    ESP_ERROR_CHECK( esp_netif_init());
+    ESP_ERROR_CHECK( esp_event_loop_create_default() );
+
+    initialize_sntp();
+
+    // wait for time to be set
+    time_t now = 0;
+    struct tm timeinfo = { 0 };
+    int retry = 0;
+    const int retry_count = 10;
+    while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < retry_count) {
+        ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, retry_count);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+    }
+    time(&now);
+    localtime_r(&now, &timeinfo);
+}
+
+static void initialize_sntp(void)
+{
+    ESP_LOGI(TAG, "Initializing SNTP");
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    sntp_setservername(0, "pool.ntp.org");
+    sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+    sntp_init();
 }
