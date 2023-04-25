@@ -11,8 +11,7 @@ broker = "test.mosquitto.org"
 def on_message(client, userdata, message):
     global messages
     message_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    msg = json.loads(message.payload.decode())
-    published_dt, sensor_id, sensor_val = msg['msg'].split(',')
+    published_dt, sensor_id, sensor_val = message.payload.decode().split(',')
     messages.append([message_time, published_dt, sensor_id, sensor_val])
     print(f"Received: {messages[-1]}")
 
@@ -38,7 +37,7 @@ if __name__ == '__main__':
     print(f"connecting to {broker}...", end="")
     client.connect(broker, 1883, 60) # Connect to the broker
     print(f"successfully connected to {broker}. Subscribing to topics...")
-    client.subscribe("test_mds5")
+    client.subscribe("/topic/mds5_light")
 
     # Start the network loop
     print("starting network loop...")
