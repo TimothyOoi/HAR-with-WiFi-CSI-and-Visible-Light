@@ -27,7 +27,7 @@ if __name__ == '__main__':
         '-t', 
         '--time_interval', 
         type=int, 
-        default=30,
+        default=40,
         help='time interval for activity data collection')
     args = parser.parse_args()
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     print(f"connecting to {broker}...", end="")
     client.connect(broker, 1883, 60) # Connect to the broker
     print(f"successfully connected to {broker}. Subscribing to topics...")
-    client.subscribe("/topic/mds5_light")
+    client.subscribe("/mds5/light")
 
     # Start the network loop
     print("starting network loop...")
