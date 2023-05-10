@@ -12,8 +12,8 @@ def combine_data():
     light_fnames = glob.glob(light_path)
 
     # convert light data from long to wide
-    for i in range(len(light_fnames)):
-    # for i in range(1):
+    # for i in range(len(light_fnames)):
+    for i in range(1):
 
         # read csv
         light_df = pd.read_csv(light_fnames[i],header=None)
@@ -56,12 +56,19 @@ def combine_data():
         # convert from long to wide using df.pivot()
         pivoted = light_df.pivot(index=1, columns=2, values=3)
 
+        print(pivoted)
+
         # put pivoted data into new dataframe
         for index, row in pivoted.iterrows():
             
             # round time to know the bucket
             rounded_time = dt.datetime.strptime(str(row.name), "%Y-%m-%d %H:%M:%S.%f")
-            rounded_time = rounded_time.replace(microsecond=(rounded_time.microsecond // 100000) * 100000)
+
+            if (round(rounded_time.microsecond,-5) == 1000000):
+                rounded_time = rounded_time.replace(microsecond=0)
+                rounded_time = rounded_time + dt.timedelta(seconds=1)
+            else:
+                rounded_time = rounded_time.replace(microsecond=round(rounded_time.microsecond,-5))
 
             # get sensor number
             for l in range(len(row.values)):
@@ -101,7 +108,13 @@ def combine_data():
             # add 5 mins 5 seconds 7 ms to csi data
             csi_row_dt = csi_row_dt + dt.timedelta(minutes=5, seconds= 5 , milliseconds= 7)
 
-            csi_row_dt = csi_row_dt.replace(microsecond=(csi_row_dt.microsecond // 100000) * 100000)
+            # round time to nearest millisecond
+            # csi_row_dt = csi_row_dt.replace(microsecond=(csi_row_dt.microsecond // 100000) * 100000)
+            if (round(csi_row_dt.microsecond,-5) == 1000000):
+                csi_row_dt = csi_row_dt.replace(microsecond=0)
+                csi_row_dt = csi_row_dt + dt.timedelta(seconds=1)
+            else:
+                csi_row_dt = csi_row_dt.replace(microsecond=round(csi_row_dt.microsecond,-5))
             
             csi_row_dt_string = csi_row_dt.strftime("%Y-%m-%d %H:%M:%S.%f")
 
