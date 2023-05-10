@@ -62,6 +62,7 @@ if __name__ == '__main__':
     start_dt = datetime.fromtimestamp(start_time)
     with open(f'{args.activity}_{file_suffix}.csv', 'w', newline='') as file:
         writer = csv.writer(file)
+        writer.writerow(['msg_received_datetime', 'msg_published_datetime', 'sensor_id', 'sensor_val'])
         for message in messages:
             if (datetime.strptime(message[1], "%Y-%m-%d %H:%M:%S.%f") - start_dt).total_seconds() < args.time_interval:
                 writer.writerow(message)
