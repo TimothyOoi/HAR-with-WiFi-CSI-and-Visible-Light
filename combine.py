@@ -16,7 +16,7 @@ def combine_data():
     for i in range(1):
 
         # read csv
-        light_df = pd.read_csv(light_fnames[i],header=None)
+        light_df = pd.read_csv(light_fnames[i],header=0)
 
         print("Reading", light_fnames[i])
         
