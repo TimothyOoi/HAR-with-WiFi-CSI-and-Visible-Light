@@ -70,20 +70,20 @@ def preprocess_input(x):
     return [np.array([csi_clean]), np.array([lgt_data])]
     
 # Define a function to make predictions on the input data
-def predict(arr):
-    classes = ['empty', 'sit', 'stand','walk']
+def get_probs(arr):
     input_mat = preprocess_input(arr)
 
     # Load the saved Keras model
     model = tf.keras.models.load_model('../model/v3_model')
     
     # Make a prediction using the loaded model
-    prediction = model.predict(input_mat)
-    
+    prediction_probs = model.predict(input_mat)
+    return prediction_probs
+
+def get_predicted_class(probs):
     # Return the predicted class
-    for idx in range(len(classes)):
-        print(f"{classes[idx]}: {prediction[0][idx]:.2%}")
-    return classes[prediction.argmax(axis=-1)[0]]
+    classes = ['empty', 'sit', 'stand','walk']
+    return classes[probs.argmax(axis=-1)[0]]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Predict acitivity from input file')
@@ -100,5 +100,11 @@ if __name__ == "__main__":
     except Exception as e:
         raise Exception(f"Error reading input file {args.input_filename}: {e}")
     
-    prediction = predict(input_arr)
+    probs = get_probs(input_arr)
+
+    classes = ['empty', 'sit', 'stand','walk']
+    for idx in range(len(classes)):
+        print(f"{classes[idx]}: {probs[0][idx]:.2%}")
+
+    prediction = get_predicted_class(probs)
     print(f"Input: {args.input_filename}, Prediction: {prediction}")
