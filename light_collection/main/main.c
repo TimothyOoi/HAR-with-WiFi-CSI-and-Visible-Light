@@ -35,6 +35,7 @@
 static const char *TAG = "LIGHT_COLLECTION";
 #define  EXAMPLE_ESP_WIFI_SSID "Monash-Malaysia"
 #define  EXAMPLE_ESP_WIFI_PASS ""
+#define SENSOR_ID               1
 
 /* Variable holding number of times ESP32 restarted since first boot.
  * It is placed into RTC memory using RTC_DATA_ATTR and
@@ -120,18 +121,18 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
     esp_mqtt_event_handle_t event = event_data;
     esp_mqtt_client_handle_t client = event->client;
-    int msg_id;
+    // int msg_id;
     switch ((esp_mqtt_event_id_t)event_id)
     {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
         MQTT_CONNEECTED=1;
         
-        msg_id = esp_mqtt_client_subscribe(client, "/topic/test1", 0);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+        // msg_id = esp_mqtt_client_subscribe(client, "/topic/test1", 0);
+        // ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
-        msg_id = esp_mqtt_client_subscribe(client, "/topic/test2", 1);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+        // msg_id = esp_mqtt_client_subscribe(client, "/topic/test2", 1);
+        // ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -190,8 +191,8 @@ char* get_light_data(double voltage) {
     // create a string to hold the light data
     char* light_data = malloc(128);
 
-    // send data to the cloud
-    snprintf(light_data, 128, "%s,3,%f", time_buf, voltage);
+    // parse string to be sent to mqtt broker
+    snprintf(light_data, 128, "%s,%d,%f", time_buf, SENSOR_ID,voltage);
 
     // return the string with the light data
     return light_data;
@@ -224,20 +225,14 @@ void app_main(void)
     struct tm timeinfo;
     time(&now);
     localtime_r(&now, &timeinfo);
-    if (now < 1681786000) {
-        ESP_LOGI(TAG, "Syncing time over NTP.");
-        initialize_sntp();
-        // wait for time to be set
-        now = 0;
-        struct tm timeinfo = { 0 };
-        int retry = 0;
-        const int retry_count = 10;
-        while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < retry_count) {
-            ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, retry_count);
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
-    } else {
-        ESP_LOGI(TAG, "System time is already set");
+    ESP_LOGI(TAG, "Syncing time over NTP.");
+    initialize_sntp();
+    // wait for time to be set
+    int retry = 0;
+    const int retry_count = 30;
+    while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < retry_count) {
+        ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, retry_count);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
     time(&now); // update 'now' variable with current time
     localtime_r(&now, &timeinfo);
@@ -262,7 +257,7 @@ void app_main(void)
             // Convert the analog reading (which goes from 0 - 4095) to a voltage (0 - 3.3V):
             voltage_acc += adc1_get_raw(ADC_CHANNEL) * (3.3 / 4095.0);
             ++count;
-            vTaskDelay(pdMS_TO_TICKS(200));
+            vTaskDelay(pdMS_TO_TICKS(20));
         }
         voltage_acc /= 5; // average the voltage
         char* light_data = get_light_data(voltage_acc);
@@ -270,31 +265,11 @@ void app_main(void)
         ESP_LOGI(TAG, "%s\n", light_data);
         if(MQTT_CONNEECTED)
         {
-            esp_mqtt_client_publish(client, "/topic/mds5_light", light_data, strlen(light_data), 0, 0);
+            esp_mqtt_client_publish(client, "/mds5/light", light_data, strlen(light_data), 0, 0);
         }
     }
 }
 
-static void obtain_time(void)
-{
-    ESP_ERROR_CHECK( nvs_flash_init() );
-    ESP_ERROR_CHECK( esp_netif_init());
-    ESP_ERROR_CHECK( esp_event_loop_create_default() );
-
-    initialize_sntp();
-
-    // wait for time to be set
-    time_t now = 0;
-    struct tm timeinfo = { 0 };
-    int retry = 0;
-    const int retry_count = 10;
-    while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < retry_count) {
-        ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, retry_count);
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-    }
-    time(&now);
-    localtime_r(&now, &timeinfo);
-}
 
 static void initialize_sntp(void)
 {
