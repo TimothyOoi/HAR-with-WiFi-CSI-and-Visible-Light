@@ -33,20 +33,20 @@ class TestGetCsiPreconditioned(unittest.TestCase):
 
 class TestPreprocessInput(unittest.TestCase):
     def test_dimensions(self):
-        arr = np.random.rand(100, 64)
+        arr = np.random.rand(100, 73)
         res = predict.preprocess_input(arr)
         self.assertEqual(res[0].shape[-1], 52) # csi has 52 columns
         self.assertEqual(res[1].shape[-1], 9) # light has 9 columns
     
     def test_light_unchanged(self):
-        arr = np.random.rand(100, 64+9)
+        arr = np.random.rand(100, 73)
         arr_copy = arr.copy()
         res = predict.preprocess_input(arr_copy)
         self.assertTrue(np.array_equal(arr[:, 64:], res[1][0]))
 
 class TestPredict(unittest.TestCase):
     def setUp(self) -> None:
-        arr = np.random.rand(100, 64)
+        arr = np.random.rand(100, 73)
         self.probs_arr = predict.get_probs(arr)
     
     def test_returns_probs(self):
