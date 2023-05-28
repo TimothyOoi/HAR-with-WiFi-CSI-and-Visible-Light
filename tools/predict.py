@@ -63,14 +63,15 @@ def dwt_denoise(vals, scheme):
 
 def preprocess_input(x):
     csi_data = x[:, :64]
-    lgt_data = x[:, -9:]
+    lgt_data = x[:, 64:]
     csi_clean = get_csi_preconditioned(csi_data)
     csi_clean = np.apply_along_axis(hampel, 1, csi_clean)
     csi_clean  = dwt_denoise(csi_clean, scheme='sym5')
     return [np.array([csi_clean]), np.array([lgt_data])]
     
-# Define a function to make predictions on the input data
 def get_probs(arr):
+    """ Return class probabilities of the input human activity data
+    """
     input_mat = preprocess_input(arr)
 
     # Load the saved Keras model
@@ -81,7 +82,8 @@ def get_probs(arr):
     return prediction_probs
 
 def get_predicted_class(probs):
-    # Return the predicted class
+    """ Return the class with highest probability as the predicted class
+    """
     classes = ['empty', 'sit', 'stand','walk']
     return classes[probs.argmax(axis=-1)[0]]
 
